@@ -13,8 +13,8 @@ The system must support various types of Events, each with a limited number of t
 
 The core technical challenges are:
 
-### Concurrent Booking: The ticket booking process must be highly concurrent. The system must safely handle numerous simultaneous registration requests for the same event without overbooking, using thread-safe mechanisms.
+Concurrent Booking: The ticket booking process must be highly concurrent. The system must safely handle numerous simultaneous registration requests for the same event without overbooking, using thread-safe mechanisms.
 
-### Thread-Safe Financial Transactions: To add a layer of realism, the Treasury department will manage a central fest budget. Each event registration will trigger a financial transaction (e.g., adding ticket revenue), and event setup will have associated costs. All operations modifying the central budget must be atomic and thread-safe to prevent data corruption and ensure the financial records are always consistent, even when thousands of transactions occur concurrently.
+Thread-Safe Financial Transactions: To add a layer of realism, the Treasury department will manage a central fest budget. Each event registration will trigger a financial transaction (e.g., adding ticket revenue), and event setup will have associated costs. All operations modifying the central budget must be atomic and thread-safe to prevent data corruption and ensure the financial records are always consistent, even when thousands of transactions occur concurrently.
 
 The final main function should act as a control interface, allowing a user to display information (like the names of coordinators and core members, event status) and trigger actions (like registering for events).
