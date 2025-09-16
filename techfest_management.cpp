@@ -1,374 +1,207 @@
-#include <bits/stdc++.h>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <map>
+#include <memory>
+#include <thread>
+#include <mutex>
+#include <atomic>
+
 using namespace std;
+
+// A central, thread-safe class to manage the fest's budget.
+class Treasury
+{
+private:
+    atomic<double> budget; // Atomic for thread-safe financial operations.
+
+    Treasury() : budget(1000.0) {} // Initial budget of 1000.0
+
+public:
+    static Treasury &getInstance()
+    {
+        static Treasury instance;
+        return instance;
+    }
+
+    Treasury(const Treasury &) = delete;
+    void operator=(const Treasury &) = delete;
+
+    void processTransaction(double amount)
+    {
+        budget = budget + amount;
+    }
+
+    double getBudget() const
+    {
+        return budget;
+    }
+};
 
 class Student
 {
 protected:
     int id;
     string name;
-    string email;
 
 public:
-    Student() {}
-    ~Student() {}
-    void setId()
-    {
-        cout << "Enter the id of the student:-" << endl;
-        cin >> id;
-    }
-    void setName()
-    {
-        cout << "Enter the name of the student:-" << endl;
-        cin >> name;
-    }
-    void setEmail()
-    {
-        cout << "Enter the email-id of the student:-" << endl;
-        cin >> email;
-    }
-
-    int getId()
-    {
-        return id;
-    }
-
-    string getName()
-    {
-        return name;
-    }
-
-    string getEmail()
-    {
-        return email;
-    }
+    Student(int id, const string &name) : id(id), name(name) {}
+    virtual ~Student() = default;
+    int getId() const { return id; }
+    string getName() const { return name; }
 };
 
-class Logistics : public Student
+class Event
 {
 public:
-    Logistics(string name) { cout << name << " is managing  logistics." << endl; }
-};
-class Treasury : public Student
-{
-public:
-    Treasury(string name) { cout << name << " is managing  treasury." << endl; }
-};
-class Website : public Student
-{
-public:
-    Website(string name) { cout << name << " is managing website." << endl; }
+    int id;
+    string name;
+    int seat_limit;
+    double ticket_price;
+    vector<int> registered_participant_ids;
+
+    Event(int id, const string &name, int limit, double price)
+        : id(id), name(name), seat_limit(limit), ticket_price(price) {}
+
+    bool isFull() const
+    {
+        return registered_participant_ids.size() >= seat_limit;
+    }
 };
 
+// Role-Based Classes 
+class Participant : public Student
+{
+public:
+    Participant(int id, const string &name) : Student(id, name) {}
+};
 class WorkforceMember : public Student
 {
+public:
+    WorkforceMember(int id, const string &name) : Student(id, name) {}
+};
+class Coordinator : public WorkforceMember
+{
+public:
+    Coordinator(int id, const string &name) : WorkforceMember(id, name) {}
+};
+class CoreMember : public WorkforceMember
+{
+public:
+    CoreMember(int id, const string &name) : WorkforceMember(id, name) {}
+};
+
+// Central management class for the entire fest.
+class TechFest
+{
 private:
-    string role;
-    string task_assigned;
-    bool taskCompleted;
+    map<int, shared_ptr<Event>> events;
+    map<int, shared_ptr<Participant>> participants;
+    vector<shared_ptr<CoreMember>> core_members;
+    mutex registration_mutex; // A lock to protect the registration logic
+
+    TechFest() {}
 
 public:
-    WorkforceMember()
+    static TechFest &getInstance()
     {
-    }
-    void assignRole()
-    {
-        cout << "Enter the role to be assigned to the particular workforce member(Logistics, treasury or website)" << endl;
-        cin >> role;
-        if (role == "Logistics")
-        {
-            string name = this->getName();
-            Logistics log1(name);
-        }
-
-        if (role == "Treasury")
-        {
-            string name = this->getName();
-            Treasury tres1(name);
-        }
-        if (role == "website")
-        {
-            string name = this->getName();
-            Website web1(name);
-        }
-    }
-    string getRole()
-    {
-        return role;
-    }
-    void performTask()
-    {
-        cout << this->getName() << " under " << role << " is performing a task." << endl;
-        taskCompleted = true;
+        static TechFest instance;
+        return instance;
     }
 
-    void assignTask()
+    TechFest(const TechFest &) = delete;
+    void operator=(const TechFest &) = delete;
+
+    // Setup and Display 
+    void addCoreMember(int id, const string &name)
     {
-        string task;
-        cout << "Enter the task to be assigned:-" << endl;
-        getline(cin >> ws, task);
-        cout << this->getName() << " has been assigned the task: " << task << endl;
+        core_members.push_back(make_shared<CoreMember>(id, name));
+    }
+    void addParticipant(int id, const string &name)
+    {
+        participants[id] = make_shared<Participant>(id, name);
+    }
+    void createEvent(int id, const string &name, int seats, double price)
+    {
+        events[id] = make_shared<Event>(id, name, seats, price);
+    }
+    void listCoreMembers() const
+    {
+        cout << "## Core Members ##" << endl;
+        for (const auto &member : core_members)
+        {
+            cout << "- " << member->getName() << endl;
+        }
+    }
+    void listEvents() const
+    {
+        cout << "\n## Event Status ##" << endl;
+        for (const auto &pair : events)
+        {
+            cout << "- " << pair.second->name << " | Registered: "
+                 << pair.second->registered_participant_ids.size() << "/" << pair.second->seat_limit << endl;
+        }
     }
 
-    void markTaskCompleted()
+    //  Core Concurrent Functionality 
+    void registerForEvent(int participant_id, int event_id)
     {
-        if (taskCompleted)
+        lock_guard<mutex> lock(registration_mutex);
+
+        if (!events.count(event_id) || !participants.count(participant_id))
+            return;
+
+        auto event = events[event_id];
+        auto participant = participants[participant_id];
+
+        if (!event->isFull())
         {
-            cout << this->getName() << " under " << role << " task has completed the task." << endl;
+            event->registered_participant_ids.push_back(participant_id);
+            // Process the financial transaction safely.
+            Treasury::getInstance().processTransaction(event->ticket_price);
+            cout << "[Success] " << participant->getName() << " registered for " << event->name << "." << endl;
         }
         else
         {
-            cout << this->getName() << " under " << role << " task hasn't completed the task." << endl;
+            cout << "[Failure] " << participant->getName() << " could not register for " << event->name << " (full)." << endl;
         }
     }
 };
-class Coordinator : public Student
-{
-public:
-    Coordinator() {}
-    vector<WorkforceMember> workforce;
-    void assignTaskToWorkforce()
-    {
-        cout << this->getName() << " is assigning a task to the workforce." << endl;
-        for (auto &member : workforce)
-        {
-            member.performTask();
-        }
-    }
 
-    void reportToCoreMember()
-    {
-        cout << this->getName() << " is reporting to a core member." << endl;
-    }
-
-    void addWorkforceMember(WorkforceMember w1)
-    {
-        if (w1.getRole() == "Logistics")
-        {
-
-            workforce.push_back(w1);
-        }
-        else if (w1.getRole() == "Treasury")
-        {
-
-            workforce.push_back(w1);
-        }
-        else if (w1.getRole() == "Website")
-        {
-
-            workforce.push_back(w1);
-        }
-
-        cout << "Added workforce member: " << w1.getName() << " to " << this->getName() << endl;
-    }
-};
-
-class CoreMember : public Student
-{
-private:
-    string specialization;
-    vector<Coordinator *> coordinators;
-
-public:
-    CoreMember()
-    {
-    }
-
-    void setSpecialization()
-    {
-        cout << "Enter the specialization of the core member(Director, Producer, Outreach coordinator):-" << endl;
-        cin >> specialization;
-    }
-    string getSpecialization()
-    {
-        return specialization;
-    }
-
-    vector<Coordinator *> getCoordinators()
-    {
-        return coordinators;
-    }
-
-    void addCoordinator(Coordinator *coordinator)
-    {
-        coordinators.push_back(coordinator);
-    }
-    void removeCoordinator(Coordinator *coordinator)
-    {
-        for (auto it = coordinators.begin(); it != coordinators.end(); ++it)
-        {
-            if (*it == coordinator)
-            {
-                coordinators.erase(it);
-                break;
-            }
-        }
-    }
-};
-/* Event class declaration */
-class Event
-{
-private:
-    int eventId;
-    string eventName;
-
-public:
-    Event(int _eventId, const string &_eventName) : eventId(_eventId), eventName(_eventName) {}
-
-    int getEventId() 
-    {
-        return eventId;
-    }
-
-    string getEventName()
-    {
-        return eventName;
-    }
-};
-
-/*Participant class*/
-class Participant : public Student
-{
-private:
-    
-    vector<Event *> eventsParticipated;
-
-public:
-    
-
-  Participant() {}
-
-    int getId() 
-    {
-        return id;
-    }
-
-    string getName()
-    {
-        return name;
-    }
-
-    vector<Event *> getEventsParticipated() 
-    {
-        return eventsParticipated;
-    }
-
-    void participateInEvent(Event *event)
-    {
-        eventsParticipated.push_back(event);
-    }
-
-    void withdrawFromEvent(Event *event)
-    {
-
-        for (auto it = eventsParticipated.begin(); it != eventsParticipated.end(); ++it)
-        {
-
-            if (*it == event)
-            {
-                eventsParticipated.erase(it);
-                cout << getName() << " withdrew from event: " << event->getEventName() << endl;
-                return;
-            }
-        }
-
-        cout << getName() << " is not participating in event: " << event->getEventName() << endl;
-    }
-};
 int main()
 {
+    TechFest &fest = TechFest::getInstance();
+    Treasury &treasury = Treasury::getInstance();
 
-    /* Student class illustration */
-    // Student student1;
-    // student1.setId();
-    // student1.setName();
-    // student1.setEmail();
+    // 1. Setup the fest
+    fest.addCoreMember(101, "Aarav (Core)");
+    fest.addParticipant(201, "Lata");
+    fest.addParticipant(202, "Vikram");
+    fest.addParticipant(203, "Nisha");
+    fest.createEvent(901, "CodeSprint Challenge", 2, 50.0); // 2 seats, 50.0 each
 
-    // // Print student information
-    // cout << "Student class illutration: ---------->" << endl;
-    // cout << "Student ID: " << student1.getId() << endl;
-    // cout << "Student Name: " << student1.getName() << endl;
-    // cout << "Student Email: " << student1.getEmail() << endl;
-    // cout << endl;
+    // 2. Display initial state
+    fest.listCoreMembers();
+    fest.listEvents();
+    cout << "Initial Budget: " << treasury.getBudget() << endl;
 
-    /*cout << "Workforce and coordinator class illutration: ---------->" << endl;
-     cout << endl;
-     cout << "Give details of workforce---->" << endl;
-     cout << endl;
-     WorkforceMember wf1;
-     wf1.setId();
-     wf1.setName();
-     wf1.setEmail();
-     wf1.assignRole();
-     wf1.assignTask();
+    // 3. Demonstrate concurrent registration and transactions
+    cout << "\n--- Simulating Concurrent Registrations ---" << endl;
+    vector<thread> threads;
 
-     WorkforceMember wf2;
-     wf2.setId();
-     wf2.setName();
-     wf2.setEmail();
-     wf2.assignRole();
-     wf2.assignTask();
-     cout << endl;
-     cout << "Now give the details of co-ordinator: " << endl;
-     cout << endl;
-     Coordinator c1;
-     c1.setId();
-     c1.setName();
-     c1.setEmail();
-     c1.addWorkforceMember(wf1);
-     c1.addWorkforceMember(wf2);
-     c1.reportToCoreMember();
-     c1.assignTaskToWorkforce(); */
+    // Using push_back to add threads to the vector
+    threads.push_back(thread(&TechFest::registerForEvent, &fest, 201, 901)); // Lata
+    threads.push_back(thread(&TechFest::registerForEvent, &fest, 202, 901)); // Vikram
+    threads.push_back(thread(&TechFest::registerForEvent, &fest, 203, 901)); // Nisha (should fail)
 
-    /* Core member class illustration */
-
-    // cout << "Core-member class illutration: ---------->" << endl;
-    // cout << endl;
-    // CoreMember coreMember;
-    // coreMember.setSpecialization();
-    // coreMember.addCoordinator(&c1);
-    // cout << "Coordinator " << c1.getName() << " is under " << coreMember.getSpecialization() << endl;
-    // cout << endl;
-    // cout << "Now performing removal of coordinator option:----------->" << endl;
-    // cout << endl;
-    // cout << "Coordinators before removal: " << coreMember.getCoordinators().size() << std::endl;
-
-    // coreMember.removeCoordinator(&c1);
-    // cout << endl;
-    // cout << "Coordinators after removal: " << coreMember.getCoordinators().size() << std::endl;
-    // cout << endl;
-
-    // /*Participant and event class illustration*/
-
-    Event *event1 = new Event(1, "Coding Contest");
-    Event *event2 = new Event(2, "Robotics Competition");
-
-    Participant *participant1 = new Participant();
-    participant1->setId();
-    participant1->setName();
-    participant1->setEmail();
-    participant1->participateInEvent(event1);
-    participant1->participateInEvent(event2);
-
-    cout<<"Participant and event class illutration: ---------->"<<endl;
-    cout<<endl;
-    cout << "Events participated by " << participant1->getName() << ": " << endl;
-    for (const auto &event : participant1->getEventsParticipated())
+    for (auto &th : threads)
     {
-        cout << event->getEventName() << endl;
+        th.join();
     }
 
-    participant1->withdrawFromEvent(event1);
-
-    cout<<endl;
-    cout << "Events participated by " << participant1->getName() << " after withdrawal: " << endl;
-    for (const auto &event : participant1->getEventsParticipated())
-    {
-        cout << event->getEventName() << endl;
-    }
-    cout<<endl;
-    delete event1;
-    delete event2;
-    delete participant1;
+    // 4. Display final state
+    fest.listEvents();
+    cout << "Final Budget: " << treasury.getBudget() << endl; // Should be 1000 + 50 + 50 = 1100
 
     return 0;
 }
